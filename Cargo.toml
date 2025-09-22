@@ -1,0 +1,18 @@
+[package]
+name = "tauri-tutorial"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+[profile]
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"

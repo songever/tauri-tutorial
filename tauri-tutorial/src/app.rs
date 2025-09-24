@@ -19,11 +19,11 @@ struct DogApi {
 
 #[derive(Serialize, Deserialize)]
 struct SaveDogArgs {
-    image: String,
+    url: String,
 }
 
-async fn save_dog(image: String) -> Result<(), JsValue> {
-    let js_args = to_value(&SaveDogArgs{ image }).unwrap();
+async fn save_dog(url: String) -> Result<(), JsValue> {
+    let js_args = to_value(&SaveDogArgs{ url }).unwrap();
     invoke("save_dog", js_args).await;
     Ok(())
 }

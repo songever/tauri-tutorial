@@ -3,10 +3,8 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-
+use serde_wasm_bindgen::to_value;
 static CSS: Asset = asset!("/assets/styles.css");
-static TAURI_ICON: Asset = asset!("/assets/tauri.svg");
-static DIOXUS_ICON: Asset = asset!("/assets/dioxus.png");
 
 #[wasm_bindgen]
 extern "C" {
@@ -14,68 +12,78 @@ extern "C" {
     async fn invoke(cmd: &str, args: JsValue) -> JsValue;
 }
 
-#[derive(Serialize, Deserialize)]
-struct GreetArgs<'a> {
-    name: &'a str,
+#[derive(Deserialize)]
+struct DogApi {
+    message: String,
 }
 
+#[derive(Serialize, Deserialize)]
+struct SaveDogArgs {
+    image: String,
+}
+
+async fn save_dog(image: String) -> Result<(), JsValue> {
+    let js_args = to_value(&SaveDogArgs{ image }).unwrap();
+    invoke("save_dog", js_args).await;
+    Ok(())
+}
+
+#[component]
 pub fn App() -> Element {
-    let mut name = use_signal(|| String::new());
-    let mut greet_msg = use_signal(|| String::new());
+    rsx! {
+        document::Stylesheet { href: CSS }
+        Title {}
+        DogView {}
+    }
+}
 
-    let greet = move |_: FormEvent| async move {
-        if name.read().is_empty() {
-            return;
+#[component]
+fn Title() -> Element {
+    rsx! {
+        div { id: "title",
+            h1 { "Hotdog! 🌭"}
         }
+    }
+}
 
-        let name = name.read();
-        let args = serde_wasm_bindgen::to_value(&GreetArgs { name: &*name }).unwrap();
-        // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-        let new_msg = invoke("greet", args).await.as_string().unwrap();
-        greet_msg.set(new_msg);
-    };
+#[component]
+fn DogView() -> Element {
+    let mut img_src = use_resource(|| async move {
+        reqwest::get("https://dog.ceo/api/breeds/image/random")
+            .await
+            .unwrap()
+            .json::<DogApi>()
+            .await
+            .unwrap()
+            .message
+    });
+
+    // let save_dog = move |url| async move {
+    //     let js_args = to_value(&serde_json::json!({ "image": url })).unwrap();
+    //         invoke("save_dog", js_args).await;
+    // };
 
     rsx! {
-        link { rel: "stylesheet", href: CSS }
-        main {
-            class: "container",
-            h1 { "Welcome to Tauri + Dioxus" }
+        div { id: "dogview",
+            img {
+                src: img_src.cloned().unwrap_or_default(),
+                style: "max-height: 300px;"
+            },
 
-            div {
-                class: "row",
-                a {
-                    href: "https://tauri.app",
-                    target: "_blank",
-                    img {
-                        src: TAURI_ICON,
-                        class: "logo tauri",
-                        alt: "Tauri logo"
-                    }
-                }
-                a {
-                    href: "https://dioxuslabs.com/",
-                    target: "_blank",
-                    img {
-                        src: DIOXUS_ICON,
-                        class: "logo dioxus",
-                        alt: "Dioxus logo"
-                    }
-                }
+        }
+        div { id: "buttons",
+            button { id: "skip",
+                onclick: move |_| img_src.restart(),
+                "Skip"
             }
-            p { "Click on the Tauri and Dioxus logos to learn more." }
-
-            form {
-                class: "row",
-                onsubmit: greet,
-                input {
-                    id: "greet-input",
-                    placeholder: "Enter a name...",
-                    value: "{name}",
-                    oninput: move |event| name.set(event.value())
-                }
-                button { r#type: "submit", "Greet" }
+            button { id: "save",
+                onclick: move |_| async move {
+                    let current = img_src.cloned().unwrap();
+                    img_src.restart();
+                    _ = save_dog(current).await;
+                },
+                "Save!"
             }
-            p { "{greet_msg}" }
         }
     }
 }

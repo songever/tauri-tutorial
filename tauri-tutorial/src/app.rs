@@ -1,4 +1,9 @@
 #![allow(non_snake_case)]
+mod nav;
+mod favorites;
+
+use nav::*;
+use favorites::*;
 
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -17,23 +22,49 @@ struct DogApi {
     message: String,
 }
 
+#[derive(Routable, Clone, PartialEq)]
+enum Route {
+    #[layout(NavBar)]
+    #[route("/")]
+    DogView,
+
+    #[route("/favorites")]
+    Favorites,
+
+    // #[route("/:..segments")]
+    // PageNotFound { segments: Vec<String>}, 
+}
+
 #[derive(Serialize, Deserialize)]
 struct SaveDogArgs {
     url: String,
 }
 
-async fn save_dog(url: String) -> Result<(), JsValue> {
+async fn save_dog(url: String) {
     let js_args = to_value(&SaveDogArgs{ url }).unwrap();
     invoke("save_dog", js_args).await;
-    Ok(())
+}
+
+async fn list_dogs() -> Result<Vec<(usize, String)>, ()> {
+    tracing::info!("listing dogs");
+    let result = invoke("list_dogs", JsValue::NULL).await;
+    let dogs: Vec<(usize, String)> = serde_wasm_bindgen::from_value(result)
+        .map_err(|e| tracing::error!("{}",e.to_string()))?;
+    Ok(dogs)
+}
+
+async fn delete_fav(id: usize) {
+    tracing::info!("delete the id: {}", id);
+    let args = serde_wasm_bindgen::to_value(&serde_json::json!({ "id": id })).unwrap();
+    invoke("delete_fav", args).await;
 }
 
 #[component]
 pub fn App() -> Element {
     rsx! {
         document::Stylesheet { href: CSS }
-        Title {}
-        DogView {}
+        Router::<Route> {}
+        // DogView {}
     }
 }
 
@@ -58,11 +89,6 @@ fn DogView() -> Element {
             .message
     });
 
-    // let save_dog = move |url| async move {
-    //     let js_args = to_value(&serde_json::json!({ "image": url })).unwrap();
-    //         invoke("save_dog", js_args).await;
-    // };
-
     rsx! {
         div { id: "dogview",
             img {
@@ -80,7 +106,7 @@ fn DogView() -> Element {
                 onclick: move |_| async move {
                     let current = img_src.cloned().unwrap();
                     img_src.restart();
-                    _ = save_dog(current).await;
+                    save_dog(current).await;
                 },
                 "Save!"
             }
